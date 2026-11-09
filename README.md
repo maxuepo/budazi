@@ -1,6 +1,6 @@
 # 不打字 budazi
 
-**Windows 按住说话 · 语音输入（自用版）**
+**Windows 按住说话 · 语音输入（自用版）** ｜ 中文 · [English](README.en.md)
 
 在任何输入框里**按住 Ctrl 说话，松开**，整理好的文字就出现在光标位置。适合给 ChatGPT、Claude、各种 AI agent 写长指令，也适合日常打字。
 
@@ -13,13 +13,13 @@
 
 ---
 
-## ⚠️ 声明：自用项目，非商业用途
+## ⚠️ 声明：作者自用的小工具
 
-这是作者自己用的小工具，开源出来给有兴趣的朋友**下载研究、安装使用**。
+这是作者自己用的小工具，开源出来给有兴趣的朋友下载研究、安装使用。
 
-- 采用 [PolyForm Noncommercial 1.0.0](LICENSE.md) 许可：个人学习、研究、自用都可以，**不允许商业用途**。
-- 没有售后和稳定性保证，按现状提供。
-- 语音识别模型 SenseVoice 和你选用的大模型，各自还有它们自己的许可条款。
+- 采用 [MIT 许可证](LICENSE)：**随便用**，个人、商业、修改、再发布都可以，保留版权声明即可。
+- **按现状提供，不做任何担保**（no warranty）：没有售后，不保证稳定或适合你的用途，使用中出了问题作者不承担责任。
+- 语音识别模型 SenseVoice 和你选用的大模型，各自还有它们自己的许可条款，需要单独遵守。
 
 ## 🔒 隐私说明
 
@@ -43,7 +43,7 @@
 2. **下载代码**，进入项目目录，安装依赖：
 
    ```powershell
-   git clone <本仓库地址> budazi
+   git clone https://github.com/maxuepo/budazi.git budazi
    cd budazi
    uv sync
    ```
@@ -129,4 +129,4 @@
 
 ## 许可证
 
-[PolyForm Noncommercial License 1.0.0](LICENSE.md) —— 仅限非商业用途。
+[MIT](LICENSE) —— 随便用，按现状提供，不做任何担保。
