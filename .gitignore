@@ -1,0 +1,24 @@
+# --- secrets: never commit ---
+api_key.txt
+fireworks.txt
+*.key
+*.env
+.env*
+
+# --- your personal settings and data ---
+config.toml
+dictionary.txt
+history.jsonl
+recordings/
+budazi.log
+budazi.crash.log
+
+# test reports contain real dictation text
+scripts/*_report*.md
+scripts/_*
+
+# --- downloads / build ---
+models/
+.venv/
+__pycache__/
+*.pyc
