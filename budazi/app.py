@@ -90,9 +90,15 @@ class App:
                                      max(self.cfg.polish_timeout_s, 30))
             threading.Thread(target=self.polisher.warmup, daemon=True).start()
             log.info("polish via %s (%s)", self.cfg.polish_base_url, "local" if local else "cloud")
-        elif self.cfg.polish:
+        elif self.cfg.polish and self.cfg.backend != "local":
             self.startup_note = "\n未配置 API key：只输出识别原文，不做 AI 润色（见 README）。"
             log.warning("no API key found; pasting raw transcripts")
+        # local LLM (Ollama / LM Studio): no key, text never leaves the computer
+        self.local_polisher = Polisher(None, self.cfg.local_base_url, self.cfg.local_model,
+                                       self.cfg.local_timeout_s)
+        if self.cfg.backend == "local":
+            self.startup_note = f"\n润色用本地模型：{self.cfg.local_model}"
+            threading.Thread(target=self._warm_local, daemon=True).start()
         names = {"ctrl": ["ctrl_l", "ctrl_r", "ctrl"], "alt": ["alt_l", "alt_r", "alt_gr"]}
         self.hotkeys = {getattr(keyboard.Key, n) for n in names.get(self.cfg.hotkey, [self.cfg.hotkey])}
         ctrl = "Control" if system.IS_MAC else "Ctrl"
@@ -133,6 +139,13 @@ class App:
             pystray.MenuItem("  梳理（补上跳掉的逻辑、调顺序，保留你的文风）",
                              lambda: self._set_level("restructure"),
                              checked=lambda _: self.cfg.polish_level == "restructure", radio=True),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("用云端模型", lambda: self._set_backend("cloud"),
+                             checked=lambda _: self.cfg.backend == "cloud", radio=True),
+            pystray.MenuItem(lambda _: f"用本地模型（{self.cfg.local_model}，不联网）",
+                             lambda: self._set_backend("local"),
+                             checked=lambda _: self.cfg.backend == "local", radio=True),
+            pystray.Menu.SEPARATOR,
             pystray.MenuItem("重新粘贴上一条", lambda: self.jobs.put(("repaste", None))),
             pystray.MenuItem("打开历史记录", lambda: system.open_path(HISTORY)
                              if HISTORY.exists() else None),
@@ -156,6 +169,39 @@ class App:
 
     def _toggle_polish(self):
         self.cfg.polish = not self.cfg.polish
+
+    # ---------- cloud / local switch ----------
+    def _set_backend(self, backend: str):
+        if backend == self.cfg.backend:
+            return
+        self.cfg.backend = backend
+        log.info("polish backend -> %s", backend)
+        if backend == "local":
+            threading.Thread(target=self._warm_local, daemon=True).start()
+        else:
+            threading.Thread(target=self._unload_local, daemon=True).start()
+
+    def _warm_local(self):
+        """Load the local model into VRAM now, so the next dictation isn't the slow one."""
+        self._ui("processing", "本地模型加载中")
+        try:
+            _, dt = self.local_polisher.polish("测试", level="light")
+            log.info("local model %s ready (%.1fs)", self.cfg.local_model, dt)
+            self._ui("flash", f"本地模型已就绪（{dt:.0f} 秒）", GREEN, 1.5)
+        except Exception as e:  # noqa: BLE001
+            log.warning("local model not reachable: %s", e)
+            self._ui("flash", "本地模型连不上：Ollama 开了吗？", RED, 3.0)
+
+    def _unload_local(self):
+        """Free the GPU right away when going back to the cloud (Ollama keeps models 5 min)."""
+        base = self.cfg.local_base_url.rsplit("/v1", 1)[0]
+        try:
+            import httpx
+            httpx.post(f"{base}/api/generate", json={"model": self.cfg.local_model, "keep_alive": 0},
+                       timeout=10)
+            log.info("unloaded local model %s", self.cfg.local_model)
+        except Exception:  # noqa: BLE001  not Ollama, or not running: nothing to unload
+            pass
 
     def _quit(self):
         self.jobs.put(("quit", None))
@@ -318,23 +364,29 @@ class App:
             return
         level_name = {"light": "轻度", "strong": "重度", "concise": "精炼",
                       "restructure": "梳理"}.get(self.cfg.polish_level, "")
-        if self.cfg.polish and self.polisher:
-            self._ui("processing", f"整理中（{level_name}）")
+        use_local = self.cfg.backend == "local"
+        polisher = self.local_polisher if use_local else self.polisher
+        if self.cfg.polish and polisher:
+            self._ui("processing", f"整理中（{level_name}{'·本地' if use_local else ''}）")
         text, t_llm, err, model_used = raw, 0.0, None, None
-        if self.cfg.polish and self.polisher and len(raw) >= self.cfg.skip_polish_under_chars:
+        if self.cfg.polish and polisher and len(raw) >= self.cfg.skip_polish_under_chars:
             style = self.cfg.app_styles.get(exe)
             level = self.cfg.polish_level
-            models = [self.cfg.polish_model]
-            if level in self.cfg.level_models:            # e.g. restructure always uses Kimi
-                models.insert(0, self.cfg.level_models[level])
-            elif (len(raw) >= self.cfg.long_min_chars and self.cfg.long_model
-                    and level in self.cfg.long_model_levels):
-                models.insert(0, self.cfg.long_model)  # fall back to the fast model
+            if use_local:
+                # one local model for everything; no cloud fallback (text must stay on this computer)
+                models = [self.cfg.local_model]
+            else:
+                models = [self.cfg.polish_model]
+                if level in self.cfg.level_models:            # e.g. restructure on a smarter model
+                    models.insert(0, self.cfg.level_models[level])
+                elif (len(raw) >= self.cfg.long_min_chars and self.cfg.long_model
+                        and level in self.cfg.long_model_levels):
+                    models.insert(0, self.cfg.long_model)  # fall back to the fast model
             voice = load_voice_samples(HISTORY, 3) if level == "restructure" else None
             for m in models:
                 try:
-                    text, t_llm = self.polisher.polish(raw, self.cfg.dictionary, style,
-                                                       model=m, level=level, voice_samples=voice)
+                    text, t_llm = polisher.polish(raw, self.cfg.dictionary, style,
+                                                  model=m, level=level, voice_samples=voice)
                     text, err, model_used = text or raw, None, m
                     break
                 except Exception as e:  # noqa: BLE001  never lose what the user said
@@ -343,7 +395,9 @@ class App:
                     text = raw
         self._paste(text, exe)
         self.last_text = text
-        if err:
+        if err and use_local:
+            self._ui("flash", "本地模型没响应，已输入原文", AMBER, 2.5)
+        elif err:
             self._ui("flash", "润色失败，已输入原文", AMBER, 2.0)
         else:
             self._ui("flash", f"已输入 {len(text)} 字", GREEN, 0.9)
@@ -358,6 +412,7 @@ class App:
                 "raw": raw, "text": text, "asr_ms": round(t_asr * 1000),
                 "llm_ms": round(t_llm * 1000), "model": short, "wav": wav,
                 "level": self.cfg.polish_level if model_used else "raw",
+                "backend": self.cfg.backend,
                 "total_ms": round(total * 1000), "error": err,
             }, ensure_ascii=False) + "\n")
 

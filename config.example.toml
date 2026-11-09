@@ -22,15 +22,17 @@ long_model = "accounts/fireworks/routers/kimi-k3-fast"   # 长段口述用更聪
 long_min_chars = 60        # 识别结果达到这么多字就用 long_model；设成 99999 就等于不用
 long_model_levels = ["light", "strong"]
 
-# ---- 方案 B：完全本地（Ollama），不需要 key，文字不出电脑 ----
-# 1. 安装 Ollama：https://ollama.com    2. 命令行运行：ollama pull qwen3:8b
-# 3. 把上面方案 A 的四行（polish_base_url / polish_model / long_model / [level_models] 里的模型）换成：
-# polish_base_url = "http://localhost:11434/v1"
-# polish_model = "qwen3:8b"
-# long_model = "qwen3:8b"
-# 本地模型比云端慢、整理效果也弱一些，但完全离线。LM Studio 用 http://localhost:1234/v1。
+# ---- 方案 B：本地模型（Ollama），不需要 key，文字不出电脑 ----
+# 1. 安装 Ollama：https://ollama.com    2. 命令行运行：ollama pull qwen3:8b（或别的模型）
+# 3. 托盘菜单里点「用本地模型」就能切换，随时可以切回云端；也可以把下面 backend 设成 "local" 作为默认。
+# 切到本地时会先把模型读进显存（第一次可能几十秒），切回云端会马上把它从显存里卸掉。
+# 本地模式下整理失败不会偷偷改用云端，而是直接输入识别原文。
+backend = "cloud"          # cloud 云端 / local 本地
+local_base_url = "http://localhost:11434/v1"   # LM Studio 用 http://localhost:1234/v1
+local_model = "qwen3:8b"   # 用 ollama list 看你装了哪些
+local_timeout_s = 60.0
 
-polish_timeout_s = 6.0     # 云端超时就退回快模型，再不行就粘贴原文（本地模型自动放宽到 30 秒）
+polish_timeout_s = 6.0     # 云端超时就退回快模型，再不行就粘贴原文
 skip_polish_under_chars = 6
 
 # ---------------- 其他 ----------------

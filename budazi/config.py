@@ -33,6 +33,10 @@ class Config:
         "restructure": "accounts/fireworks/routers/kimi-k3-fast"})  # level -> model, any length
     polish_base_url: str = "https://api.fireworks.ai/inference/v1"  # any OpenAI-compatible API
     api_key_env: str = "FIREWORKS_API_KEY"   # env var holding the key (optional)
+    backend: str = "cloud"                   # "cloud" or "local" (switchable from the tray menu)
+    local_base_url: str = "http://localhost:11434/v1"   # Ollama; LM Studio: http://localhost:1234/v1
+    local_model: str = "qwen3:8b"
+    local_timeout_s: float = 60.0            # first request loads the model into VRAM
     polish_timeout_s: float = 6.0
     skip_polish_under_chars: int = 6  # very short phrases are pasted raw
     keep_recordings: int = 20         # save last N takes to recordings/ (0 = off)

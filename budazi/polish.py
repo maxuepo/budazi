@@ -91,6 +91,9 @@ PROMPTS = {"light": SYSTEM_PROMPT, "strong": SYSTEM_PROMPT_STRONG, "concise": SY
            "restructure": SYSTEM_PROMPT_RESTRUCTURE}
 
 
+_HAN = re.compile(r"[一-鿿]")
+
+
 def build_messages(text: str, glossary: list[str], style: str | None,
                    level: str = "light", voice_samples: list[str] | None = None) -> list[dict]:
     system = PROMPTS.get(level, SYSTEM_PROMPT)
@@ -98,9 +101,13 @@ def build_messages(text: str, glossary: list[str], style: str | None,
         system += "\n\n用户的个人词表（出现相近读音时优先用这些写法）：" + "、".join(glossary)
     if style:
         system += "\n\n当前输入场景：" + style
-    if voice_samples and level == "restructure":
+    english = not _HAN.search(text)
+    if voice_samples and level == "restructure" and not english:
         system += ("\n\n用户自己以前写的几段话（只用来模仿他的文风和用词，不要引用里面的内容）：\n"
                    + "\n".join(f"- {s}" for s in voice_samples))
+    if english:  # models (esp. small local ones) tend to answer a Chinese prompt in Chinese
+        system += ("\n\n注意：这段原文是英文。整理结果必须全部用英文写，绝对不要翻译成中文。"
+                   "\nThe transcript is in English: write the result in English only. Never translate it.")
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": f"<transcript>{text}</transcript>"},
@@ -112,6 +119,8 @@ _THINK = re.compile(r"<think>.*?</think>", re.S)
 
 def _clean_output(out: str) -> str:
     out = _THINK.sub("", out).strip()
+    if "</think>" in out:  # some local reasoning models emit only the closing tag
+        out = out.rsplit("</think>", 1)[1].strip()
     out = re.sub(r"^</?transcript>|</?transcript>$", "", out).strip()
     return out
 

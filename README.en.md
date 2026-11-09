@@ -26,8 +26,8 @@ I built this for my own use and am sharing it for anyone who wants to study it o
 
 - **This project collects nothing.** There is no analytics, no telemetry and no server run by the author, so the author never sees what you say.
 - **Your audio never leaves your computer.** Speech recognition runs entirely locally.
-- **The only thing that leaves your computer**: when cloud AI cleanup is on, the **transcribed text** is sent to **the LLM provider you configured yourself** (Fireworks by default) and is handled under that provider's privacy policy.
-- **Fully offline**: use a local model (Ollama, see "Option B" below) or turn off "AI 润色" (AI cleanup) in the tray menu.
+- **The only thing that leaves your computer**: when cleanup uses the cloud model, the **transcribed text** is sent to **the LLM provider you configured yourself** (Fireworks by default) and is handled under that provider's privacy policy.
+- **Fully offline**: switch to "用本地模型" (local model, Ollama, see "Option B" below) in the tray menu, or turn off "AI 润色" (AI cleanup). In local mode budazi never falls back to the cloud: if the model fails, you get the raw transcript.
 - **Local records**: `history.jsonl` keeps each raw transcript and its cleaned-up version so you can look back. Recordings are not saved by default (`keep_recordings = 0`). These files stay on your computer and are listed in `.gitignore`, so they are never committed.
 - **Permissions**: hold-to-talk and auto-paste need a global keyboard hook and clipboard access (on a Mac you grant these yourself, see below), which a few antivirus programs may flag. All the code is public, so you can check it yourself.
 
@@ -72,8 +72,10 @@ Steps 1 to 4 are the same on Windows and macOS; after that they differ.
 
    **Option B: local (fully offline, free)**
    - Install [Ollama](https://ollama.com) and run `ollama pull qwen3:8b` (about 5 GB; needs a GPU, a decent CPU or an Apple Silicon Mac).
-   - Copy `config.example.toml` to `config.toml` and change the few lines described under "方案 B" (Option B) in that file.
-   - Local models are slower than the cloud and clean up text less well.
+   - Copy `config.example.toml` to `config.toml` and set `local_model` to the model you installed (`ollama list` shows them).
+   - Once running, pick **"用本地模型" (use local model)** in the tray menu to switch, and switch back to the cloud any time. To start in local mode, set `backend = "local"` in `config.toml`.
+   - budazi asks the model to skip its "thinking" step automatically; otherwise reasoning models add several seconds per phrase.
+   - Measured on an RTX 3080 Ti with a 9B model: about 0.4 s per phrase, faster than the cloud. Small models sometimes invent conclusions on the Restructure (梳理) level, so the cloud is better for that one.
 
 ### Windows: start it
 
@@ -127,7 +129,7 @@ Steps 1 to 4 are the same on Windows and macOS; after that they differ.
 | Hold Ctrl (Mac: Control), speak, release | The text is pasted at your cursor |
 | While holding, press another key, click or scroll | Treated as a shortcut; the recording is cancelled |
 | Tap Ctrl, or a quick Ctrl+C | Nothing happens |
-| Right-click the tray icon (Mac: click the menu bar icon) | Toggle AI cleanup, switch level, re-paste the last result, open history, quit |
+| Right-click the tray icon (Mac: click the menu bar icon) | Toggle AI cleanup, switch level, **switch between cloud and local model**, re-paste the last result, open history, quit |
 
 **Four cleanup levels**
 
