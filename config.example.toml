@@ -1,7 +1,7 @@
 # 示例配置。想改设置时：把这个文件复制一份，命名为 config.toml 再改（config.toml 不会被提交到 git）。
 # 没有 config.toml 时程序就用这个文件。改完重启程序生效。
 
-hotkey = "ctrl"            # 按住说话的键：ctrl（左右都行）/ ctrl_r（只认右 Ctrl）/ alt_r / f13 ...
+hotkey = "ctrl"            # 按住说话的键：ctrl（左右都行）/ ctrl_r（只认右 Ctrl）/ alt_r（右 Alt / 右 Option）/ f13 ...
 min_hold_ms = 300          # 按得比这短就当误触
 ui_delay_ms = 200          # 按住超过这么久才显示"录音中"（Ctrl+C 这类快捷键不会闪提示）；录音从按下就开始，不丢字
 language = "auto"          # 语音识别语言：auto / zh / en / ja / ko / yue
@@ -36,15 +36,22 @@ skip_polish_under_chars = 6
 # ---------------- 其他 ----------------
 keep_recordings = 0        # 保存最近 N 次录音到 recordings/ 方便排查识别问题；0 = 不保存（默认）
 beep = true
-overlay = true             # 屏幕底部显示"录音中 / 整理中 / 已输入"的小浮条
+overlay = true             # 屏幕底部显示"录音中 / 整理中 / 已输入"的小浮条（仅 Windows；macOS 看菜单栏图标颜色）
 restore_clipboard = true
 
-# 按前台程序调整风格（进程名小写）
+# 按前台程序调整风格。Windows 用进程名（小写，如 code.exe），macOS 用 App 名（小写，如 code）
 [app_styles]
 "code.exe" = "用户在 VS Code 里给 AI 编程助手写指令，保留所有代码标识符和文件名。"
 "windowsterminal.exe" = "用户在终端里给 AI agent 写指令，保留命令、路径和代码标识符。"
 "cursor.exe" = "用户在 Cursor 里给 AI 编程助手写指令，保留所有代码标识符和文件名。"
 "weixin.exe" = "用户在微信聊天，语气口语、简洁，不要用列表。"
+# macOS
+"code" = "用户在 VS Code 里给 AI 编程助手写指令，保留所有代码标识符和文件名。"
+"terminal" = "用户在终端里给 AI agent 写指令，保留命令、路径和代码标识符。"
+"iterm2" = "用户在终端里给 AI agent 写指令，保留命令、路径和代码标识符。"
+"cursor" = "用户在 Cursor 里给 AI 编程助手写指令，保留所有代码标识符和文件名。"
+"wechat" = "用户在微信聊天，语气口语、简洁，不要用列表。"
+"微信" = "用户在微信聊天，语气口语、简洁，不要用列表。"
 
 # 某些档位不管长短都用指定模型（梳理要补逻辑、调顺序，需要更聪明的模型）
 [level_models]

@@ -1,4 +1,4 @@
-"""不打字 (budazi) for Windows: hold a key, speak, release -> cleaned text is pasted at the cursor."""
+"""不打字 (budazi) for Windows and macOS: hold a key, speak, release -> cleaned text is pasted."""
 from __future__ import annotations
 
 import json
@@ -6,22 +6,21 @@ import logging
 import queue
 import threading
 import time
-import winsound
 from datetime import datetime
 
 import pystray
 from PIL import Image, ImageDraw
 from pynput import keyboard
 
-from . import config
+from . import config, system
 from .asr import SenseVoice
 from .audio import Recorder
 from .live import LiveTranscriber
-from .overlay import AMBER, GREEN, GREY, RED, Overlay
 from .polish import Polisher
-from .winput import foreground_exe, paste_text
+from .system import foreground_exe, paste_text
 
 log = logging.getLogger("budazi")
+RED, AMBER, GREEN, GREY = "#ff4d4f", "#f5a524", "#3fb950", "#9aa4b2"   # indicator dot colors
 HISTORY = config.ROOT / "history.jsonl"
 
 
@@ -69,8 +68,11 @@ def load_voice_samples(path, n: int = 3, exclude_raw: str | None = None) -> list
     return out
 
 
-def _beep(freq: int) -> None:
-    threading.Thread(target=winsound.Beep, args=(freq, 50), daemon=True).start()
+def _beep(kind: str) -> None:
+    try:
+        system.play_tone(kind)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class App:
@@ -93,16 +95,19 @@ class App:
             log.warning("no API key found; pasting raw transcripts")
         names = {"ctrl": ["ctrl_l", "ctrl_r", "ctrl"], "alt": ["alt_l", "alt_r", "alt_gr"]}
         self.hotkeys = {getattr(keyboard.Key, n) for n in names.get(self.cfg.hotkey, [self.cfg.hotkey])}
-        self.hotkey_label = {"ctrl": "Ctrl（左右都行）", "ctrl_r": "右 Ctrl"}.get(self.cfg.hotkey,
-                                                                              self.cfg.hotkey)
+        ctrl = "Control" if system.IS_MAC else "Ctrl"
+        self.hotkey_label = {"ctrl": f"{ctrl}（左右都行）", "ctrl_r": f"右 {ctrl}",
+                             "alt_r": "右 Option" if system.IS_MAC else "右 Alt"}.get(
+            self.cfg.hotkey, self.cfg.hotkey)
         self.recording = False
         self.cancelled = False
         self.active_key = None
         self.live: LiveTranscriber | None = None
         self._worker_thread: threading.Thread | None = None
         self.overlay = None
-        if self.cfg.overlay:
+        if self.cfg.overlay and system.IS_WINDOWS:  # macOS: menu-bar icon color + sounds instead
             try:
+                from .overlay import Overlay
                 self.overlay = Overlay(lambda: self.rec.level)
             except Exception:  # noqa: BLE001
                 log.exception("overlay failed to start; continuing without it")
@@ -129,7 +134,7 @@ class App:
                              lambda: self._set_level("restructure"),
                              checked=lambda _: self.cfg.polish_level == "restructure", radio=True),
             pystray.MenuItem("重新粘贴上一条", lambda: self.jobs.put(("repaste", None))),
-            pystray.MenuItem("打开历史记录", lambda: __import__("os").startfile(HISTORY)
+            pystray.MenuItem("打开历史记录", lambda: system.open_path(HISTORY)
                              if HISTORY.exists() else None),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("退出", self._quit),
@@ -143,8 +148,7 @@ class App:
         except Exception:  # noqa: BLE001
             pass
         if self.cfg.beep:
-            winsound.Beep(660, 60)
-            winsound.Beep(990, 80)
+            _beep("ready")
 
     def _set_level(self, level: str):
         self.cfg.polish_level = level
@@ -168,7 +172,12 @@ class App:
             pass
 
     def _set_icon(self, img) -> None:
-        # updating the tray can block; keep it off the keyboard-hook thread
+        if system.IS_MAC:
+            # AppKit may only be touched from the main thread (where pystray runs the app)
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(setattr, self.tray, "icon", img)
+            return
+        # Windows: updating the tray can block; keep it off the keyboard-hook thread
         threading.Thread(target=setattr, args=(self.tray, "icon", img), daemon=True).start()
 
     def _cancel(self, why: str) -> None:
@@ -186,7 +195,7 @@ class App:
             self._ui("recording")
             self._set_icon(REC)
             if self.cfg.beep:
-                _beep(880)
+                _beep("start")
 
     # ---------- hotkey (must return fast: it runs inside the OS keyboard hook) ----------
     def _on_press(self, key):
@@ -234,7 +243,7 @@ class App:
             self._ui("hide")   # shortcuts and taps end silently
             return
         if self.cfg.beep:
-            _beep(660)
+            _beep("stop")
         self._ui("processing", "识别中")
         self._set_icon(BUSY)
         self._ensure_worker()
@@ -364,22 +373,9 @@ class App:
         self.rec.close()
 
 
-def _message_box(text: str, title: str = "不打字", icon: int = 0x40) -> None:
-    import ctypes
-    ctypes.windll.user32.MessageBoxW(None, text, title, icon | 0x40000)  # topmost
-
-
-def _single_instance() -> bool:
-    """Hold a named mutex for the process lifetime; False if another copy has it."""
-    import ctypes
-    k32 = ctypes.windll.kernel32
-    globals()["_MUTEX"] = k32.CreateMutexW(None, False, "Local\\BudaziDictation")
-    return k32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
-
-
 def main():
-    if not _single_instance():
-        _message_box("不打字 已经在运行了。\n\n图标在任务栏右下角（可能收在 ^ 里），右键可以退出。")
+    if not system.single_instance():
+        system.message_box("不打字 已经在运行了。\n\n" + system.TRAY_HINT)
         return
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S",
@@ -402,7 +398,8 @@ def main():
         App().run()
     except Exception as e:  # noqa: BLE001  pythonw has no console, so show startup errors
         log.exception("startup failed")
-        _message_box(f"不打字 启动失败：\n{type(e).__name__}: {e}\n\n详情见 budazi.log", icon=0x10)
+        system.message_box(f"不打字 启动失败：\n{type(e).__name__}: {e}\n\n详情见 budazi.log",
+                           error=True)
 
 
 if __name__ == "__main__":

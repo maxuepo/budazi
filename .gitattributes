@@ -1,0 +1,5 @@
+# macOS scripts must keep LF line endings or bash refuses to run them
+*.sh      text eol=lf
+*.command text eol=lf
+# Windows batch files
+*.bat     text eol=crlf

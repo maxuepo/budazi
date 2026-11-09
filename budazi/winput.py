@@ -1,4 +1,7 @@
-"""Windows helpers: paste text at the cursor and find the foreground app."""
+"""Windows platform layer: paste at the cursor, foreground app, sounds, dialogs, single instance.
+
+macinput.py implements the same functions for macOS; system.py picks one.
+"""
 from __future__ import annotations
 
 import ctypes
@@ -74,3 +77,34 @@ def _restore_later(old: str, ours: str) -> None:
             pyperclip.copy(old)
     except pyperclip.PyperclipException:
         pass
+
+
+# ---- sounds, dialogs, single instance, opening files ----
+
+_TONES = {"start": [(880, 50)], "stop": [(660, 50)], "ready": [(660, 60), (990, 80)]}
+
+
+def play_tone(kind: str) -> None:
+    import winsound
+
+    def run():
+        for freq, ms in _TONES.get(kind, []):
+            winsound.Beep(freq, ms)
+    threading.Thread(target=run, daemon=True).start()
+
+
+def message_box(text: str, title: str = "不打字", error: bool = False) -> None:
+    user32.MessageBoxW(None, text, title, (0x10 if error else 0x40) | 0x40000)  # topmost
+
+
+def single_instance() -> bool:
+    """Hold a named mutex for the process lifetime; False if another copy has it."""
+    globals()["_MUTEX"] = kernel32.CreateMutexW(None, False, "Local\\BudaziDictation")
+    return kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
+
+
+def open_path(path) -> None:
+    os.startfile(path)
+
+
+TRAY_HINT = "图标在任务栏右下角（可能收在 ^ 里），右键可以退出。"

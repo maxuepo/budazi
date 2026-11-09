@@ -12,6 +12,7 @@ history.jsonl
 recordings/
 budazi.log
 budazi.crash.log
+.budazi.lock
 
 # test reports contain real dictation text
 scripts/*_report*.md
